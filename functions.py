@@ -8,27 +8,16 @@ pd.set_option('display.max_rows', 20)
 pd.set_option('display.max_columns', None)
 
 # @profile
-def find_timestamps(df, SMA_MIN):
-    timestamps = df['Timestamp'].tolist()
-    clear_timestamps = []
-    start_timestamp = None
-    end_timestamp = None
-    for index, tmsp in enumerate(timestamps):
-        # print(index, tmsp)
-        if not start_timestamp:
-            start_timestamp = tmsp
-
-        if index + 1 < len(timestamps):
-            if not tmsp + SMA_MIN * 60 == timestamps[index + 1]:
-                end_timestamp = timestamps[index]
-                clear_timestamps.append([start_timestamp, end_timestamp])
-                start_timestamp = None
-                end_timestamp = None
-        else:
-            # Обработка последнего интервала
-            end_timestamp = tmsp
-            clear_timestamps.append([start_timestamp, end_timestamp])
-            break
+def find_timestamps(df, SMA_MIN):    
+    timestamps_series = df.sort_values('Timestamp')
+    timestamps_series['Next_Timestemp'] = timestamps_series['Timestemp'].shift(1)
+    timestamps_series['Next_Transaction'] = \
+            timestamps_series['Timestemp'] + SMA_MIN * 60 == timestamps_series['Next_Timestemp']
+    timestamps_series['Transaction_id'] = timestamps_series['Next_Transaction'].cumsum()
+    clear_timestamps = timestamps_series\
+            .groupby('Transaction_id')\
+            .agg({'Timestamp': 'min', 'Next_Timestemp': 'max'})\
+            .rename({'Timestamp': 'start_time', 'Next_Timestemp': 'end_time'})
 
     return clear_timestamps
 
