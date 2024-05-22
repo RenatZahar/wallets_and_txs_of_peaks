@@ -1,5 +1,5 @@
 import pandas as pd
-import functions as fu
+from functions import find_timestamps, read_tx_dfs
 from dask.distributed import Client
 import dask.dataframe as dd
 from memory_profiler import profile
@@ -43,21 +43,21 @@ def main():
     client = Client(threads_per_worker=THREADS_PER_WORKER, n_workers=WORKERS, local_directory='I:/dask-temp')  # memory_limit=MEMORY_LIMIT
     print("Dashboard link:", client.dashboard_link)
 
-    intervals = pd.read_parquet(INTERVALS_DIR)
+    intervals = dd.read_parquet(INTERVALS_DIR)
     print('2')
-    buy_intervals = intervals.loc[intervals['Buy'] == 1]
-    sell_intervals = intervals.loc[intervals['Sell'] == 1]
+    buy_intervals = intervals[intervals['Buy'] == 1]
+    sell_intervals = intervals[intervals['Sell'] == 1]
     print('3')
-    time_intervals_to_buy = fu.find_timestamps(buy_intervals, SMA_MIN)
-    time_intervals_to_sell = fu.find_timestamps(sell_intervals, SMA_MIN)
+    time_intervals_to_buy_df = find_timestamps(buy_intervals, SMA_MIN)
+    time_intervals_to_sell_df = find_timestamps(sell_intervals, SMA_MIN)
     print('4')
-    txs = fu.read_tx_dfs(TXS_DIR, TEST)
+    txs = read_tx_dfs(TXS_DIR, TEST)
     txs = txs.repartition(npartitions=WORKERS * THREADS_PER_WORKER * 2)  # Увеличиваем количество партий для уменьшения размера каждой
     txs = txs.persist()  # Сохраняем данные в распределенной памяти
 
     # Предварительное вычисление DataFrame с интервалами
-    time_intervals_to_buy_df = fu.create_time_intervals_df(time_intervals_to_buy)
-    time_intervals_to_sell_df = fu.create_time_intervals_df(time_intervals_to_sell)
+    # time_intervals_to_buy_df = fu.create_time_intervals_df(time_intervals_to_buy)
+    # time_intervals_to_sell_df = fu.create_time_intervals_df(time_intervals_to_sell)
 
     futures_buy = client.map(preprocess_transactions, [txs] * len(time_intervals_to_buy_df), [time_intervals_to_buy_df] * len(time_intervals_to_buy_df))
     futures_sell = client.map(preprocess_transactions, [txs] * len(time_intervals_to_sell_df), [time_intervals_to_sell_df] * len(time_intervals_to_sell_df))
@@ -67,8 +67,8 @@ def main():
     filtered_sell_transactions = client.gather(futures_sell)
 
     # Преобразование объектов в pandas DataFrame, если они являются объектами Dask
-    filtered_buy_transactions = [df.compute() if hasattr(df, 'compute') else df for df in filtered_buy_transactions]
-    filtered_sell_transactions = [df.compute() if hasattr(df, 'compute') else df for df in filtered_sell_transactions]
+    # filtered_buy_transactions = [df.compute() if hasattr(df, 'compute') else df for df in filtered_buy_transactions]
+    # filtered_sell_transactions = [df.compute() if hasattr(df, 'compute') else df for df in filtered_sell_transactions]
 
     # Проверка типов данных перед преобразованием
     print(type(filtered_buy_transactions[0]))
